@@ -9,11 +9,12 @@ using System.Linq;
 namespace App {
     public class FaceRecognizer {
 
+        public const string UnknownLabel = "unknown";
+
         private HaarCascade _face;
         private FaceRepository _rep;
         private List<Image<Gray, byte>> _images = new List<Image<Gray, byte>>();
         private List<string> _labels = new List<string>();
-        private static object _sync = new object();
 
         public FaceRecognizer(string haarcascade, FaceRepository faceLabelsRepository) {
             _face = new HaarCascade(haarcascade);
@@ -67,7 +68,7 @@ namespace App {
                 result.Label = recognizer.Recognize(faceImage);
             }
             else {
-                result.Label = "unknow";
+                result.Label = UnknownLabel;
             }
             return result;
         }

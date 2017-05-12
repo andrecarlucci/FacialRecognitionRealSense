@@ -9,23 +9,18 @@
     <StackPanel Background="Black" Orientation="Horizontal" HorizontalAlignment="Center">
         <Border Background="White" BorderThickness="1" BorderBrush="Black" HorizontalAlignment="Center" VerticalAlignment="Center" >
             <Grid>
-                <Image x:Name="Video" Height="480" Width="640" RenderTransformOrigin="0.5,0.5">
-                    <Image.RenderTransform>
-                        <ScaleTransform ScaleX="-1" />
-                    </Image.RenderTransform>
-                </Image>
+                <Image x:Name="Video" Height="480" Width="640"/>
                 <StackPanel VerticalAlignment="Bottom">
                     <TextBlock x:Name="Distance" Text="Person" Background="WhiteSmoke" Foreground="Black" />
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition />
+                            <ColumnDefinition  />
                             <ColumnDefinition Width="200" />
                         </Grid.ColumnDefinitions>
                         <TextBox x:Name="FaceName" Grid.Column="0" 
                                  Background="WhiteSmoke" 
                                  Foreground="Black" 
-                                 HorizontalAlignment="Left"
-                                 Width="450"
+                                 HorizontalAlignment="Stretch"
                                  />
                         <Button x:Name="Register" Width="200px" Grid.Column="1" Click="Register_Click">
                             <TextBlock Text="Register" />

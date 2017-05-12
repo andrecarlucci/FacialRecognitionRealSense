@@ -21,6 +21,7 @@ namespace App {
 
         private MCvFont _font = new MCvFont(FONT.CV_FONT_HERSHEY_TRIPLEX, 0.5d, 0.5d);
         private FaceRecognizer _faceRecognizer;
+        private MirrorService _mirrorService;
         private bool _recognizedCalled;
         private string _faceName;
 
@@ -28,8 +29,11 @@ namespace App {
             InitializeComponent();
             Loaded += MainWindow_Loaded;
 
-            var faceRep = new FaceRepository();
+            var faceRep = new FaceRepository("Faces");
             _faceRecognizer = new FaceRecognizer("Assets\\haarcascade_frontalface_default.xml", faceRep);
+
+            _mirrorService = new MirrorService("http://localhost:8080/user");
+            _mirrorService.Start();
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e) {
@@ -65,10 +69,11 @@ namespace App {
                 device.WaitForFrames();
                 var frame = device.GetFrameData(StreamType.Color);
 
-                var wb = PaintColorImage(frame.Bytes, width, height, PixelFormats.Bgr24);
-                var bmp = BitmapFromWriteableBitmap(wb);
+                var currentFrame = new Image<Bgr, byte>(frame.Width, frame.Height) {
+                    Bytes = frame.Bytes
+                };
+                currentFrame = currentFrame.Flip(FLIP.HORIZONTAL);
 
-                var currentFrame = new Image<Bgr, Byte>(bmp);
                 string label = null;
                 if(_recognizedCalled) {
                     _recognizedCalled = false;
@@ -76,20 +81,31 @@ namespace App {
                 }
                 var face = _faceRecognizer.DetectFirstFace(currentFrame, label);
 
-                if(face != null) {
-                    //draw the face detected in the 0th (gray) channel with blue color
-                    currentFrame.Draw(face.FaceInfo.rect, new Bgr(System.Drawing.Color.Red), 2);
-                    currentFrame.Draw(face.Label,
-                                        ref _font,
-                                        new System.Drawing.Point(face.FaceInfo.rect.X - 2, face.FaceInfo.rect.Y - 2),
-                                        new Bgr(System.Drawing.Color.LightGreen));
+                if (face != null) {
+                    DrawFaceSquare(currentFrame, face);
+                    DrawName(currentFrame, face);
+                    _mirrorService.SetNewLabel(face.Label);
                 }
-                
+                else {
+                    _mirrorService.SetNewLabel("");
+                }
+
                 var bitmapSource = ConvertToBitmapSource(currentFrame.Bitmap);
                 bitmapSource.Freeze();
                 await ChangeUI(() => Video.Source = bitmapSource);
             }
 
+        }
+
+        private void DrawName(Image<Bgr, byte> currentFrame, DetectedFace face) {
+            currentFrame.Draw(face.Label,
+                ref _font,
+                new System.Drawing.Point(face.FaceInfo.rect.X - 2, face.FaceInfo.rect.Y - 2),
+                new Bgr(System.Drawing.Color.LightGreen));
+        }
+
+        private static void DrawFaceSquare(Image<Bgr, byte> currentFrame, DetectedFace face) {
+            currentFrame.Draw(face.FaceInfo.rect, new Bgr(System.Drawing.Color.Red), 2);
         }
 
         public BitmapSource ConvertToBitmapSource(Bitmap bitmap) {
