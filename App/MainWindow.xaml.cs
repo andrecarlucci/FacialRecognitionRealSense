@@ -1,33 +1,43 @@
-﻿using OpenRealSense;
-using System;
+﻿using System;
+using System.Diagnostics;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Diagnostics;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using FaceLib;
+using OpenRealSense;
+using System.Drawing;
+using System.IO;
+using System.Windows.Interop;
 using Emgu.CV;
 using Emgu.CV.Structure;
-using System.Drawing;
-using System.Windows.Interop;
-using System.IO;
+using Emgu.CV.CvEnum;
 
-namespace WpfApp {
+namespace App {
+    /// <summary>
+    /// Interaction logic for MainWindow.xaml
+    /// </summary>
     public partial class MainWindow : Window {
 
-        private ImageProcessor _imageProcessor;
+        private MCvFont _font = new MCvFont(FONT.CV_FONT_HERSHEY_TRIPLEX, 0.5d, 0.5d);
+        private FaceRecognizer _faceRecognizer;
+        private bool _recognizedCalled;
+        private string _faceName;
 
         public MainWindow() {
             InitializeComponent();
             Loaded += MainWindow_Loaded;
+
+            var faceRep = new FaceRepository();
+            _faceRecognizer = new FaceRecognizer("Assets\\haarcascade_frontalface_default.xml", faceRep);
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e) {
-            Task.Run(async ()  =>  {
+            Task.Run(async () => {
                 try {
                     await Start();
                 }
-                catch(Exception ex) {
+                catch (Exception ex) {
                     Debug.WriteLine("Exception: " + ex);
                 }
             });
@@ -50,20 +60,31 @@ namespace WpfApp {
 
             device.EnableStream(StreamType.Color, width, height, FormatType.bgr8, 30);
             device.Start();
-
-            //var cam = new Capture(1);
             
-            while(true) {
-                //var currentFrame = cam.QueryFrame().Resize(320, 240, Emgu.CV.CvEnum.INTER.CV_INTER_CUBIC);
+            while (true) {
                 device.WaitForFrames();
                 var frame = device.GetFrameData(StreamType.Color);
 
                 var wb = PaintColorImage(frame.Bytes, width, height, PixelFormats.Bgr24);
                 var bmp = BitmapFromWriteableBitmap(wb);
 
-
                 var currentFrame = new Image<Bgr, Byte>(bmp);
-                var gray = currentFrame.Convert<Gray, Byte>();
+                string label = null;
+                if(_recognizedCalled) {
+                    _recognizedCalled = false;
+                    label = _faceName;
+                }
+                var face = _faceRecognizer.DetectFirstFace(currentFrame, label);
+
+                if(face != null) {
+                    //draw the face detected in the 0th (gray) channel with blue color
+                    currentFrame.Draw(face.FaceInfo.rect, new Bgr(System.Drawing.Color.Red), 2);
+                    currentFrame.Draw(face.Label,
+                                        ref _font,
+                                        new System.Drawing.Point(face.FaceInfo.rect.X - 2, face.FaceInfo.rect.Y - 2),
+                                        new Bgr(System.Drawing.Color.LightGreen));
+                }
+                
                 var bitmapSource = ConvertToBitmapSource(currentFrame.Bitmap);
                 bitmapSource.Freeze();
                 await ChangeUI(() => Video.Source = bitmapSource);
@@ -89,49 +110,6 @@ namespace WpfApp {
             }
         }
 
-
-        //public async Task Start() {
-        //    var context = Context.Create(11100);
-        //    var num = context.GetDeviceCount();
-
-        //    if (num == 0) {
-        //        await ChangeUI(() => Title = "Camera not detected :(");
-        //        return;
-        //    }
-
-        //    var device = context.GetDevice(0);
-        //    await ChangeUI(() => Title = "Name: " + device.GetDeviceName());
-
-        //    var width = 640;
-        //    var height = 480;
-
-        //    _imageProcessor = new ImageProcessor(device.GetDepthScale(), width, height);
-        //    device.EnableStream(StreamType.depth, width, height, FormatType.z16, 30);
-        //    device.Start();
-
-        //    for (var i = 0; i < 30; i++) {
-        //        device.WaitForFrames();
-        //    }
-        //    while (true) {
-        //        for (var i = 0; i < 2; i++) {
-        //            device.WaitForFrames();
-        //        }
-        //        var depthFrame = device.GetFrameData(StreamType.depth);
-        //        await UpdateVideoAsync(depthFrame);
-        //    }
-        //}
-
-        //private async Task UpdateVideoAsync(FrameData depthFrame) {
-        //    var result = _imageProcessor.Process(depthFrame.Bytes);
-        //    var wb = PaintDepthImage(result.Image, depthFrame.Width, depthFrame.Height, PixelFormats.Gray16);
-        //    wb.Freeze();
-
-        //    await Dispatcher.BeginInvoke(new Action(() => {
-        //        Distance.Text = result.Text;
-        //        Video.Source = wb;
-        //    }));
-        //}
-
         private WriteableBitmap PaintColorImage(byte[] bytes, int width, int height, PixelFormat format) {
             var stride = width * format.BitsPerPixel / 8;
             var wb = new WriteableBitmap(width, height, 96, 96, format, null);
@@ -148,6 +126,11 @@ namespace WpfApp {
 
         private async Task ChangeUI(Action action) {
             await Dispatcher.InvokeAsync(action);
+        }
+
+        private void Register_Click(object sender, RoutedEventArgs e) {
+            _recognizedCalled = true;
+            _faceName = FaceName.Text;
         }
     }
 }
