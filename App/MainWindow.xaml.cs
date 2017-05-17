@@ -12,6 +12,7 @@ using System.Windows.Interop;
 using Emgu.CV;
 using Emgu.CV.Structure;
 using Emgu.CV.CvEnum;
+using SharpMediator;
 
 namespace App {
     /// <summary>
@@ -24,6 +25,7 @@ namespace App {
         private MirrorService _mirrorService;
         private bool _recognizedCalled;
         private string _faceName;
+        private bool _streamEnabled;
 
         public MainWindow() {
             InitializeComponent();
@@ -32,32 +34,36 @@ namespace App {
             var faceRep = new FaceRepository("Faces");
             _faceRecognizer = new FaceRecognizer("Assets\\haarcascade_frontalface_default.xml", faceRep);
 
-            _mirrorService = new MirrorService("http://localhost:8080/user");
+            _mirrorService = new MirrorService("http://localhost:8080/");
             _mirrorService.Start();
+
+            Mediator.Default.Subscribe<string>(this, username => {
+                ChangeUI(() => Detected.Text = username);
+            });
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e) {
-            Task.Run(async () => {
+            Task.Factory.StartNew(() => {
                 try {
-                    await Start();
+                    Start();
                 }
                 catch (Exception ex) {
                     Debug.WriteLine("Exception: " + ex);
                 }
-            });
+            }, TaskCreationOptions.LongRunning);
         }
 
-        public async Task Start() {
+        public void Start() {
             var context = Context.Create();
             var num = context.GetDeviceCount();
 
             if (num == 0) {
-                await ChangeUI(() => Title = "Camera not detected :(");
+                ChangeUI(() => Title = "Camera not detected :(");
                 return;
             }
 
             var device = context.GetDevice(0);
-            await ChangeUI(() => Title = "Name: " + device.GetDeviceName());
+            ChangeUI(() => Title = "Name: " + device.GetDeviceName());
 
             var width = 640;
             var height = 480;
@@ -82,19 +88,23 @@ namespace App {
                 var face = _faceRecognizer.DetectFirstFace(currentFrame, label);
 
                 if (face != null) {
-                    DrawFaceSquare(currentFrame, face);
-                    DrawName(currentFrame, face);
+                    if(_streamEnabled) {
+                        DrawFaceSquare(currentFrame, face);
+                        DrawName(currentFrame, face);
+                    }
                     _mirrorService.SetNewLabel(face.Label);
                 }
                 else {
                     _mirrorService.SetNewLabel("");
                 }
 
-                var bitmapSource = ConvertToBitmapSource(currentFrame.Bitmap);
-                bitmapSource.Freeze();
-                await ChangeUI(() => Video.Source = bitmapSource);
+                if (_streamEnabled) {
+                    var bitmapSource = ConvertToBitmapSource(currentFrame.Bitmap);
+                    bitmapSource.Freeze();
+                    ChangeUI(() => Video.Source = bitmapSource);
+                }
+                currentFrame.Dispose();
             }
-
         }
 
         private void DrawName(Image<Bgr, byte> currentFrame, DetectedFace face) {
@@ -140,13 +150,23 @@ namespace App {
             return wb;
         }
 
-        private async Task ChangeUI(Action action) {
-            await Dispatcher.InvokeAsync(action);
+        private void ChangeUI(Action action) {
+            Dispatcher.BeginInvoke(action);
         }
 
         private void Register_Click(object sender, RoutedEventArgs e) {
             _recognizedCalled = true;
             _faceName = FaceName.Text;
+        }
+
+        private void StreamEnabled_Click(object sender, RoutedEventArgs e) {
+            _streamEnabled = !_streamEnabled;
+            if (_streamEnabled) {
+                StreamEnabledText.Text = "Disable Stream";
+            }
+            else {
+                StreamEnabledText.Text = "Enable Stream";
+            }
         }
     }
 }
