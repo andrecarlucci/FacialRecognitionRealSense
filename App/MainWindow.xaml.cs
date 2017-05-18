@@ -13,11 +13,10 @@ using Emgu.CV;
 using Emgu.CV.Structure;
 using Emgu.CV.CvEnum;
 using SharpMediator;
+using System.Runtime.InteropServices;
 
 namespace App {
-    /// <summary>
-    /// Interaction logic for MainWindow.xaml
-    /// </summary>
+   
     public partial class MainWindow : Window {
 
         private MCvFont _font = new MCvFont(FONT.CV_FONT_HERSHEY_TRIPLEX, 0.5d, 0.5d);
@@ -118,36 +117,20 @@ namespace App {
             currentFrame.Draw(face.FaceInfo.rect, new Bgr(System.Drawing.Color.Red), 2);
         }
 
-        public BitmapSource ConvertToBitmapSource(Bitmap bitmap) {
-            return Imaging.CreateBitmapSourceFromHBitmap(
-                bitmap.GetHbitmap(),
-                IntPtr.Zero,
-                Int32Rect.Empty,
-                BitmapSizeOptions.FromEmptyOptions()
-            );
-        }
+        [DllImport("gdi32.dll", EntryPoint = "DeleteObject")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool DeleteObject([In] IntPtr hObject);
 
-        private Bitmap BitmapFromWriteableBitmap(WriteableBitmap writeBmp) {
-            using (var outStream = new MemoryStream()) {
-                var enc = new BmpBitmapEncoder();
-                enc.Frames.Add(BitmapFrame.Create(writeBmp));
-                enc.Save(outStream);
-                return new Bitmap(outStream);
+        public ImageSource ConvertToBitmapSource(Bitmap bmp) {
+            var handle = bmp.GetHbitmap();
+            try {
+                return Imaging.CreateBitmapSourceFromHBitmap(
+                    handle, 
+                    IntPtr.Zero, 
+                    Int32Rect.Empty, 
+                    BitmapSizeOptions.FromEmptyOptions());
             }
-        }
-
-        private WriteableBitmap PaintColorImage(byte[] bytes, int width, int height, PixelFormat format) {
-            var stride = width * format.BitsPerPixel / 8;
-            var wb = new WriteableBitmap(width, height, 96, 96, format, null);
-            wb.WritePixels(new Int32Rect(0, 0, width, height), bytes, stride, 0);
-            return wb;
-        }
-
-        private WriteableBitmap PaintDepthImage(byte[] bytes, int width, int height, PixelFormat format) {
-            var depthStride = width * format.BitsPerPixel / 8;
-            var wb = new WriteableBitmap(width, height, 96, 96, format, null);
-            wb.WritePixels(new Int32Rect(0, 0, width, height), bytes, depthStride, 0);
-            return wb;
+            finally { DeleteObject(handle); }
         }
 
         private void ChangeUI(Action action) {

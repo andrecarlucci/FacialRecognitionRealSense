@@ -181,7 +181,6 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="DetectedFace.cs" />
-    <Compile Include="EigenObjectRecognizer.cs" />
     <Compile Include="FaceRecognizer.cs" />
     <Compile Include="FaceRegister.cs" />
     <Compile Include="FaceRepository.cs" />

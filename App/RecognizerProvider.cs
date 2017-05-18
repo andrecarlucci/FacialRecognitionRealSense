@@ -7,7 +7,7 @@ namespace App {
     public class RecognizerProvider {
         private List<Image<Gray, byte>> _images = new List<Image<Gray, byte>>();
         private List<string> _labels = new List<string>();
-        private CustomEigenObjectRecognizer _recognizer;
+        private EigenObjectRecognizer _recognizer;
         private bool _shouldCreateNew = true;
 
 
@@ -21,10 +21,10 @@ namespace App {
             return _images.Any();
         }
 
-        public CustomEigenObjectRecognizer GetRecognizer() {
+        public EigenObjectRecognizer GetRecognizer() {
             if (_shouldCreateNew) {
                 var termCrit = new MCvTermCriteria(_images.Count, 0.001);
-                _recognizer = new CustomEigenObjectRecognizer(
+                _recognizer = new EigenObjectRecognizer(
                        _images.ToArray(),
                        _labels.ToArray(),
                        3000,
