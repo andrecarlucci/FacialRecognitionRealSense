@@ -1,68 +1,68 @@
 ﻿using Emgu.CV;
-using Emgu.CV.CvEnum;
+using Emgu.CV.Face;
 using Emgu.CV.Structure;
 using System;
-using System.Drawing;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace App {
-    public class FaceRecognizer {
-
+    public partial class FaceRecognizer {
         public const string UnknownLabel = "unknown";
 
-        private HaarCascade _face;
-        private FaceRepository _rep;
-        private RecognizerProvider _recognizerProvider;
+        private readonly List<Image<Gray, Byte>> _images = new List<Image<Gray, Byte>>();
+        private readonly List<string> _labels = new List<string>();
 
-        public FaceRecognizer(string haarcascade, FaceRepository faceLabelsRepository) {
-            _face = new HaarCascade(haarcascade);
-            _recognizerProvider = new RecognizerProvider();
-            _rep = faceLabelsRepository;
-            var regs = faceLabelsRepository.List();
-            foreach (var reg in regs) {
-                _recognizerProvider.AddNewLabel(reg.Label, new Image<Gray, byte>(reg.ImagePath));
+        private LBPHFaceRecognizer _faceRecognizer;
+
+        private bool _shouldTrain = true;
+        private object _sync = new object();
+
+        public void AddNewLabel(string newLabel, Image<Gray, Byte> faceImage) {
+            lock (_sync) {
+                _images.Add(faceImage);
+                _labels.Add(newLabel);
+                _shouldTrain = true;
             }
         }
 
-        public DetectedFace DetectFirstFace(Image<Bgr, Byte> frame, string newLabel = null) {
-            var result = new DetectedFace();
-            var gray = frame.Convert<Gray, Byte>();
-            var facesDetected = gray.DetectHaarCascade(
-                    _face,
-                    1.2,
-                    10,
-                    HAAR_DETECTION_TYPE.DO_CANNY_PRUNING,
-                    new Size(20, 20));
-            gray.Dispose();
+        public bool Train() {
+            lock (_sync) {
+                if(_images.Count() <= 1) {
+                    return false;
+                }
+                if (_faceRecognizer != null) {
+                    _faceRecognizer.Dispose();
+                }
 
-            if (!facesDetected[0].Any()) {
-                return null;
+                _faceRecognizer = new LBPHFaceRecognizer(1, 8, 8, 8, 100);
+                _faceRecognizer.Train(_images.ToArray(), _images.Select((c, i) => i).ToArray());
+                _shouldTrain = false;
+                return true;
             }
+        }
 
-            MCvAvgComp faceInfo = facesDetected[0].First();
-            result.FaceInfo = faceInfo;
-
-            var faceImage = frame.Copy(faceInfo.rect)
-                                .Convert<Gray, byte>()
-                                .Resize(100, 100,
-                                INTER.CV_INTER_CUBIC);
-
-            if (!String.IsNullOrEmpty(newLabel)) {
-                _recognizerProvider.AddNewLabel(newLabel, faceImage);
-                _rep.Save(newLabel, faceImage);
-                result.Label = newLabel;
-                return result;
+        public FaceRecognitionResult Recognize(Image<Gray, byte> faceImage) {
+            lock (_sync) {
+                if (_shouldTrain) {
+                    if(!Train()) {
+                        return new FaceRecognitionResult {
+                            Status = FaceRecognitionStatus.Someone
+                        };
+                    }
+                }
+                if (_images.Any()) {
+                    var result = _faceRecognizer.Predict(faceImage);
+                    if (result.Label > 0) {
+                        return new FaceRecognitionResult {
+                            Status = FaceRecognitionStatus.IdentifiedUser,
+                            Label = _labels[result.Label]
+                        };
+                    }
+                }
+                return new FaceRecognitionResult {
+                    Status = FaceRecognitionStatus.Someone
+                };
             }
-
-            if (_recognizerProvider.HasConfiguredFaces()) {
-                result.Label = _recognizerProvider.GetRecognizer()
-                                                  .Recognize(faceImage);
-            }
-            else {
-                result.Label = UnknownLabel;
-            }
-            faceImage.Dispose();
-            return result;
         }
     }
 }
