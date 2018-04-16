@@ -14,6 +14,7 @@ using Emgu.CV.CvEnum;
 using SharpMediator;
 using System.Runtime.InteropServices;
 using Intel.RealSense;
+using App.OCR;
 
 namespace App {
 
@@ -54,20 +55,33 @@ namespace App {
         private void MotionDetected(object sender, EventArgs e) {
 
         }
-
+        
         private void MainWindow_Loaded(object sender, RoutedEventArgs e) {
-            Task.Factory.StartNew(() => {
-                try {
-                    Start();
-                }
-                catch (Exception ex) {
-                    Debug.WriteLine("Exception: " + ex);
-                }
-            }, TaskCreationOptions.LongRunning);
+            _capture = new VideoCapture(1);
+            _ocrService = new OcrService();
+            _ocrService.Init(".\\", "eng", Emgu.CV.OCR.OcrEngineMode.TesseractLstmCombined);
+            ComponentDispatcher.ThreadIdle += ProccessFrame;
+
+            //Task.Factory.StartNew(() => {
+            //    try {
+            //        Start();
+            //    }
+            //    catch (Exception ex) {
+            //        Debug.WriteLine("Exception: " + ex);
+            //    }
+            //}, TaskCreationOptions.LongRunning);
+        }
+
+        private OcrService _ocrService;
+        private VideoCapture _capture;
+
+        private void ProccessFrame(object sender, EventArgs e) {
+            var frame = _capture.QueryFrame();
+            //Debug.WriteLine("OCR-> " + _ocrService.Recognize(frame) ?? "None");
+            Debug.WriteLine("OCR-> " + _ocrService.RecognizeFullPage(frame) ?? "None");
         }
 
         public void Start() {
-
             var context = new Context();
             var devices = context.QueryDevices();
             var num = devices.Count();
@@ -104,13 +118,6 @@ namespace App {
 
                     //}
                     using (var frame = frames.First(x => x.Profile.Stream == Intel.RealSense.Stream.Color) as VideoFrame) {
-                        //var mat = new Mat();
-                        //mat.Create(frame.Width, frame.Height, DepthType.Cv8U, 3);
-                        //mat.
-                        //var color = new Mat(new System.Drawing.Size(width, height), DepthType.Cv8U, 3, frame.Data, 1920);
-                        //var currentFrame = new Mat();
-                        //CvInvoke.Flip(color, currentFrame, FlipType.Horizontal);
-
                         var pointer = frame.Data;
                         var bitsPerPixel = frame.BitsPerPixel;
                         var length = bitsPerPixel / 8 * frame.Width * frame.Height;
@@ -130,7 +137,7 @@ namespace App {
                         var result = _facePipeline.ProccessFrame(currentFrame);
                         
                         if (_streamEnabled) {
-                            if (result.Status != FaceRecognizer.FaceRecognitionStatus.None) {
+                            if (result.Status != FaceRecognitionStatus.Nobody) {
                                 DrawFaceSquare(currentFrame, result.FacePosition);
                                 DrawName(currentFrame, result.FacePosition, result.Label);
                             }
