@@ -3,7 +3,7 @@ using System.Net.Http;
 using System.Threading.Tasks;
 
 namespace App {
-    public class MirrorClient {
+    public class MirrorClient : IMirrorClient {
 
         private HttpClient _client;
         private string _url;

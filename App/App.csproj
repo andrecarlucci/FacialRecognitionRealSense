@@ -190,11 +190,16 @@
     <Compile Include="FacePipeline.cs" />
     <Compile Include="FaceRecognitionResult.cs" />
     <Compile Include="FaceRecognitionStatus.cs" />
+    <Compile Include="GlobalSuppressions.cs" />
+    <Compile Include="MediatorMessages\MirrorUserChanged.cs" />
     <Compile Include="MotionDetector.cs" />
     <Compile Include="OCR\OCRMode.cs" />
     <Compile Include="OCR\OcrService.cs" />
     <Compile Include="PipelineResult.cs" />
+    <Compile Include="SmartMirror\FakeMirrorClient.cs" />
+    <Compile Include="SmartMirror\IMirrorClient.cs" />
     <Compile Include="SmartMirror\MirrorService.cs" />
+    <Compile Include="SmartMirror\MirrorState.cs" />
     <Compile Include="SmartMirror\MirrorStateMachine.cs" />
     <Page Include="MainWindow.xaml">
       <Generator>MSBuild:Compile</Generator>

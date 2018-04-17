@@ -15,6 +15,7 @@ using SharpMediator;
 using System.Runtime.InteropServices;
 using Intel.RealSense;
 using App.OCR;
+using App.MediatorMessages;
 
 namespace App {
 
@@ -24,8 +25,10 @@ namespace App {
         private FaceDetector _faceDetector;
         private FaceRecognizer _faceRecognizer;
         private FacePipeline _facePipeline;
+        private OcrService _ocrService;
+        private VideoCapture _capture;
 
-        private MirrorService _mirrorService;
+        private MirrorStateMachine _mirror;
         //private MotionDetector _motionDetector;
         private bool _streamEnabled;
 
@@ -44,11 +47,11 @@ namespace App {
             //_motionDetector = new MotionDetector();
             //_motionDetector.OnMovement += MotionDetected;
 
-            _mirrorService = new MirrorService("http://localhost:8080/");
-            _mirrorService.Start();
+            //_mirror = new MirrorStateMachine(new MirrorClient("http://localhost:8080/"));
+            _mirror = new MirrorStateMachine(new FakeMirrorClient());
 
-            Mediator.Default.Subscribe<string>(this, username => {
-                ChangeUI(() => Detected.Text = username);
+            Mediator.Default.Subscribe<MirrorUserChanged>(this, msg => {
+                ChangeUI(() => Detected.Text = msg.Username);
             });
         }
 
@@ -60,28 +63,33 @@ namespace App {
             _capture = new VideoCapture(1);
             _ocrService = new OcrService();
             _ocrService.Init(".\\", "eng", Emgu.CV.OCR.OcrEngineMode.TesseractLstmCombined);
-            ComponentDispatcher.ThreadIdle += ProccessFrame;
+            //ComponentDispatcher.ThreadIdle += ProccessFrame;
 
-            //Task.Factory.StartNew(() => {
-            //    try {
-            //        Start();
-            //    }
-            //    catch (Exception ex) {
-            //        Debug.WriteLine("Exception: " + ex);
-            //    }
-            //}, TaskCreationOptions.LongRunning);
+            Task.Factory.StartNew(async () => {
+                try {
+                    await StartCamera();
+                }
+                catch (Exception ex) {
+                    Debug.WriteLine("Exception: " + ex);
+                }
+            }, TaskCreationOptions.LongRunning);
         }
-
-        private OcrService _ocrService;
-        private VideoCapture _capture;
-
+        
         private void ProccessFrame(object sender, EventArgs e) {
-            var frame = _capture.QueryFrame();
+           
             //Debug.WriteLine("OCR-> " + _ocrService.Recognize(frame) ?? "None");
-            Debug.WriteLine("OCR-> " + _ocrService.RecognizeFullPage(frame) ?? "None");
+            
+            //Debug.WriteLine("OCR-> " + _ocrService.RecognizeFullPage(frame) ?? "None");
         }
 
-        public void Start() {
+        public async Task StartCamera() {
+            while(true) {
+                var frame = _capture.QueryFrame();
+                await ProcessFrame(frame.ToImage<Bgr, Byte>()).ConfigureAwait(false);
+            }
+        }
+
+        public async Task Start() {
             var context = new Context();
             var devices = context.QueryDevices();
             var num = devices.Count();
@@ -105,8 +113,11 @@ namespace App {
             var pipe = new Pipeline();
             pipe.Start();
             
-
-            var tick = false; 
+            var tick = false;
+            for (int i = 0; i < 30; i++) {
+                var frame = pipe.WaitForFrames();
+                frame.Dispose();
+            }
 
             while (true) {
                 using (var frames = pipe.WaitForFrames()) {
@@ -128,66 +139,34 @@ namespace App {
                             Bytes = bytes
                         };
                         var toFlip = pre.Resize(width, height, Inter.Cubic);
-                        
+
                         var currentFrame = toFlip.Flip(FlipType.Horizontal);
                         pre.Dispose();
-                        frame.Dispose();
                         toFlip.Dispose();
-                        
-                        var result = _facePipeline.ProccessFrame(currentFrame);
-                        
-                        if (_streamEnabled) {
-                            if (result.Status != FaceRecognitionStatus.Nobody) {
-                                DrawFaceSquare(currentFrame, result.FacePosition);
-                                DrawName(currentFrame, result.FacePosition, result.Label);
-                            }
 
-                            var bitmapSource = ConvertToBitmapSource(currentFrame.Bitmap);
-                            bitmapSource.Freeze();
-                            ChangeUI(() => Video.Source = bitmapSource);
-                        }
-                        
-                        currentFrame.Dispose();
+                        await ProcessFrame(currentFrame);
                     }
                 }
             }
+        }
 
-            //while (true) {
-            //    device.WaitForFrames();
-            //    var frame = device.GetFrameData(StreamType.Color);
+        private async Task ProcessFrame(Image<Bgr, byte> currentFrame) {
+            var result = _facePipeline.ProccessFrame(currentFrame);
 
-            //    var currentFrame = new Image<Bgr, byte>(frame.Width, frame.Height) {
-            //        Bytes = frame.Bytes
-            //    };
-            //    currentFrame = currentFrame.Flip(FLIP.HORIZONTAL);
+            await _mirror.ProcessEvent(result);
 
-            //    _motionDetector.ComputeFrame(currentFrame);
+            if (_streamEnabled) {
+                if (result.Status != FaceRecognitionStatus.Nobody) {
+                    DrawFaceSquare(currentFrame, result.FacePosition);
+                    DrawName(currentFrame, result.FacePosition, result.Label);
+                }
 
-            //    string label = null;
-            //    if (_recognizedCalled) {
-            //        _recognizedCalled = false;
-            //        label = _faceName;
-            //    }
-            //    var face = _faceRecognizer.DetectFirstFace(currentFrame, label);
+                var bitmapSource = ConvertToBitmapSource(currentFrame.Bitmap);
+                bitmapSource.Freeze();
+                ChangeUI(() => Video.Source = bitmapSource);
+            }
 
-            //    if (face != null) {
-            //        if (_streamEnabled) {
-            //            DrawFaceSquare(currentFrame, face);
-            //            DrawName(currentFrame, face);
-            //        }
-            //        _mirrorService.SetNewLabel(face.Label);
-            //    }
-            //    else {
-            //        _mirrorService.SetNewLabel("");
-            //    }
-
-            //    if (_streamEnabled) {
-            //        var bitmapSource = ConvertToBitmapSource(currentFrame.Bitmap);
-            //        bitmapSource.Freeze();
-            //        ChangeUI(() => Video.Source = bitmapSource);
-            //    }
-            //    currentFrame.Dispose();
-            //}
+            currentFrame.Dispose();
         }
 
         private void DrawName(Image<Bgr, byte> currentFrame, Rectangle facePosition, string label) {
