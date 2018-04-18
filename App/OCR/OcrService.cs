@@ -81,27 +81,26 @@ namespace App.OCR {
                         if (_ocr.Recognize() != 0) {
                             return null;
                         }
-                        var characters = _ocr.GetCharacters();
+                        //var characters = _ocr.GetCharacters();
 
-                        //convert the coordinates from the local region to global
-                        for (int i = 0; i < characters.Length; i++) {
-                            Rectangle charRegion = characters[i].Region;
-                            charRegion.Offset(rect.Location);
-                            characters[i].Region = charRegion;
-                        }
-                        allChars.AddRange(characters);
-                        allText += _ocr.GetUTF8Text() + Environment.NewLine;
-
+                        ////convert the coordinates from the local region to global
+                        //for (int i = 0; i < characters.Length; i++) {
+                        //    Rectangle charRegion = characters[i].Region;
+                        //    charRegion.Offset(rect.Location);
+                        //    characters[i].Region = charRegion;
+                        //}
+                        //allChars.AddRange(characters);
+                        allText += _ocr.GetUTF8Text() + "|";
                     }
                 }
 
-                Bgr drawRegionColor = new Bgr(Color.Red);
-                foreach (Rectangle rect in regions) {
-                    CvInvoke.Rectangle(image, rect, drawRegionColor.MCvScalar);
-                }
-                foreach (Tesseract.Character c in allChars) {
-                    CvInvoke.Rectangle(image, c.Region, drawCharColor.MCvScalar);
-                }
+                //Bgr drawRegionColor = new Bgr(Color.Red);
+                //foreach (Rectangle rect in regions) {
+                //    CvInvoke.Rectangle(image, rect, drawRegionColor.MCvScalar);
+                //}
+                //foreach (Tesseract.Character c in allChars) {
+                //    CvInvoke.Rectangle(image, c.Region, drawCharColor.MCvScalar);
+                //}
 
                 return allText;
             }

@@ -7,5 +7,9 @@ namespace App {
             Mediator.Default.Publish(username);
             return Task.FromResult(true);
         }
+
+        public Task<bool> SendMessage(string message, int size = 12) {
+            return Task.FromResult(true);
+        }
     }
 }

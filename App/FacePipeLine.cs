@@ -1,7 +1,7 @@
 ﻿using Emgu.CV;
 using Emgu.CV.CvEnum;
 using Emgu.CV.Structure;
-using static App.FaceRecognizer;
+using System.Drawing;
 
 namespace App {
     public partial class FacePipeline {
@@ -35,13 +35,23 @@ namespace App {
         }
 
         public PipelineResult ProccessFrame(Image<Bgr, byte> frame) {
-            var rectangle = _faceDetector.DetectFirstFace(frame);
-            if (rectangle.IsEmpty) {
+            var rectangles = _faceDetector.DetectFaces(frame);
+            if (rectangles.Length == 0) {
                 return new PipelineResult {
                     Status = FaceRecognitionStatus.Nobody
                 };
             }
-            
+
+            var result = ReconizeFace(frame, rectangles[0]);
+
+            return new PipelineResult {
+                Status = result.Status,
+                FacePositions = rectangles,
+                FirstFaceLabel = result.Label
+            };
+        }
+
+        private FaceRecognitionResult ReconizeFace(Image<Bgr, byte> frame, Rectangle rectangle) {
             var cropped = frame.Copy(rectangle)
                                .Convert<Gray, byte>()
                                .Resize(100, 100, Inter.Cubic);
@@ -55,15 +65,7 @@ namespace App {
                 }
             }
 
-            var result = _faceRecognizer.Recognize(cropped);
-            //var result = new FaceRecognitionResult {
-            //    Status = FaceRecognitionStatus.Unknown
-            //};
-            return new PipelineResult {
-                Status = result.Status,
-                FacePosition = rectangle,
-                Label = result.Label
-            };
+            return _faceRecognizer.Recognize(cropped);
         }
     }
 }

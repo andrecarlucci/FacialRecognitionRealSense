@@ -16,10 +16,22 @@ using System.Runtime.InteropServices;
 using Intel.RealSense;
 using App.OCR;
 using App.MediatorMessages;
+using Serilog.Core;
+using Serilog;
+using App.Selfie;
+using App.Twitter;
 
 namespace App {
 
     public partial class MainWindow : Window {
+
+        private static int _width = 640;
+        private static int _height = 480;
+        public static bool UseRealSense = true;
+        public static bool UseOcr = true;
+        public static bool UseMotionDetection = true;
+        public static int CameraIndex = 0;
+        public static string WordForPicture = "SELFIE";
 
         private FaceRepository _faceRepository;
         private FaceDetector _faceDetector;
@@ -27,73 +39,80 @@ namespace App {
         private FacePipeline _facePipeline;
         private OcrService _ocrService;
         private VideoCapture _capture;
+        private SelfieStateMachine _selfieStateMachine;
 
         private MirrorStateMachine _mirror;
         //private MotionDetector _motionDetector;
         private bool _streamEnabled;
+        private bool _tick;
 
         public MainWindow() {
             InitializeComponent();
             Loaded += MainWindow_Loaded;
+        }
 
+        private void MotionDetected(object sender, EventArgs e) {
+
+        }
+
+        private void MainWindow_Loaded(object sender, RoutedEventArgs e) {
             _faceRepository = new FaceRepository("Faces");
-            //_faceDetector = new FaceDetector("Assets\\haarcascade_frontalface_default.xml");
             _faceDetector = new FaceDetector("Assets\\haarcascade_frontalface_alt_tree.xml");
             _faceRecognizer = new FaceRecognizer();
 
             _facePipeline = new FacePipeline(_faceDetector, _faceRecognizer, _faceRepository);
             _facePipeline.Prepare();
 
-            //_motionDetector = new MotionDetector();
-            //_motionDetector.OnMovement += MotionDetected;
+            var mirrorClient = new MirrorClient();
+            _mirror = new MirrorStateMachine(mirrorClient);
+            _selfieStateMachine = new SelfieStateMachine(mirrorClient, new TwitterClient());
 
-            //_mirror = new MirrorStateMachine(new MirrorClient("http://localhost:8080/"));
-            _mirror = new MirrorStateMachine(new FakeMirrorClient());
+            //_mirror = new MirrorStateMachine(new FakeMirrorClient());
 
             Mediator.Default.Subscribe<MirrorUserChanged>(this, msg => {
                 ChangeUI(() => Detected.Text = msg.Username);
             });
-        }
 
-        private void MotionDetected(object sender, EventArgs e) {
+            Mediator.Default.Subscribe<OcrDetected>(this, msg => {
+                ChangeUI(() => Ocr.Text = msg.Message);
+            });
 
-        }
-        
-        private void MainWindow_Loaded(object sender, RoutedEventArgs e) {
-            _capture = new VideoCapture(1);
-            _ocrService = new OcrService();
-            _ocrService.Init(".\\", "eng", Emgu.CV.OCR.OcrEngineMode.TesseractLstmCombined);
-            //ComponentDispatcher.ThreadIdle += ProccessFrame;
+            if (UseOcr) {
+                _ocrService = new OcrService();
+                _ocrService.Init(".\\", "eng", Emgu.CV.OCR.OcrEngineMode.TesseractLstmCombined);
+            }
 
             Task.Factory.StartNew(async () => {
                 try {
-                    await StartCamera();
+                    if (UseRealSense) {
+                        await StartRealSense();
+                    }
+                    else {
+                        await StartCamera();
+                    }
                 }
                 catch (Exception ex) {
-                    Debug.WriteLine("Exception: " + ex);
+                    Log.Logger.Error(ex, "On StartCamera");
+                    if (ex.InnerException != null) {
+                        Log.Logger.Error(ex.InnerException, "Inner exception");
+                    }
                 }
             }, TaskCreationOptions.LongRunning);
         }
-        
-        private void ProccessFrame(object sender, EventArgs e) {
-           
-            //Debug.WriteLine("OCR-> " + _ocrService.Recognize(frame) ?? "None");
-            
-            //Debug.WriteLine("OCR-> " + _ocrService.RecognizeFullPage(frame) ?? "None");
-        }
 
         public async Task StartCamera() {
-            while(true) {
+            _capture = new VideoCapture(CameraIndex);
+            while (true) {
                 var frame = _capture.QueryFrame();
                 await ProcessFrame(frame.ToImage<Bgr, Byte>()).ConfigureAwait(false);
             }
         }
 
-        public async Task Start() {
+        public async Task StartRealSense() {
             var context = new Context();
             var devices = context.QueryDevices();
             var num = devices.Count();
-            
+
             if (num > 0) {
                 ChangeUI(() => Title = "Name: " + devices.First().Info);
             }
@@ -104,15 +123,13 @@ namespace App {
                 return;
             }
 
-            var width = 640;
-            var height = 480;
             //var config = new Config();
             //config.EnableStream(Intel.RealSense.Stream.Color, width, height, Format.Bgr8, 15);
             //config.EnableStream(Intel.RealSense.Stream.Depth, width, height, Format.Z16, 15);
 
             var pipe = new Pipeline();
             pipe.Start();
-            
+
             var tick = false;
             for (int i = 0; i < 30; i++) {
                 var frame = pipe.WaitForFrames();
@@ -122,7 +139,7 @@ namespace App {
             while (true) {
                 using (var frames = pipe.WaitForFrames()) {
                     tick = !tick;
-                    
+
                     //using (var depth = frames.First(x => x.Profile.Stream == Intel.RealSense.Stream.Depth) as DepthFrame) {
                     //    var msg = $"{depth.GetDistance(depth.Width / 2, depth.Height / 2)} meters away";
                     //    ChangeUI(() => Title = msg);
@@ -138,44 +155,73 @@ namespace App {
                         var pre = new Image<Bgr, byte>(frame.Width, frame.Height) {
                             Bytes = bytes
                         };
-                        var toFlip = pre.Resize(width, height, Inter.Cubic);
-
-                        var currentFrame = toFlip.Flip(FlipType.Horizontal);
-                        pre.Dispose();
-                        toFlip.Dispose();
-
-                        await ProcessFrame(currentFrame);
+                        await ProcessFrame(pre);
                     }
                 }
             }
         }
 
-        private async Task ProcessFrame(Image<Bgr, byte> currentFrame) {
-            var result = _facePipeline.ProccessFrame(currentFrame);
+        private async Task ProcessFrame(Image<Bgr, byte> frame) {
+            Image<Bgr, byte> resized = null;
+            Image<Bgr, byte> currentFrame = null;
+            try {
+                _tick = !_tick;
+                resized = frame.Resize(_width, _height, Inter.Cubic);
+                currentFrame = resized.Flip(FlipType.Horizontal);
 
-            await _mirror.ProcessEvent(result);
+                if (UseOcr && _tick) {
+                    var msg = _ocrService.Recognize(resized.Mat) ?? "NONE";
+                    Debug.WriteLine("OCR-> " + msg);
 
-            if (_streamEnabled) {
-                if (result.Status != FaceRecognitionStatus.Nobody) {
-                    DrawFaceSquare(currentFrame, result.FacePosition);
-                    DrawName(currentFrame, result.FacePosition, result.Label);
+                    if (msg.ToUpper().Contains(WordForPicture)) {
+                        Mediator.Default.Publish(new OcrDetected { Message = WordForPicture });
+                    }
+                    //Debug.WriteLine("OCR-> " + _ocrService.RecognizeFullPage(currentFrame.Mat) ?? "None");
                 }
 
-                var bitmapSource = ConvertToBitmapSource(currentFrame.Bitmap);
-                bitmapSource.Freeze();
-                ChangeUI(() => Video.Source = bitmapSource);
-            }
+                var result = _facePipeline.ProccessFrame(currentFrame);
 
-            currentFrame.Dispose();
+                await _selfieStateMachine.ProcessEvent(new SomeOneInFrontOfMirror {
+                    Image = frame,
+                    NumberOfFaces = result.FacePositions.Length
+                });
+
+                await _mirror.ProcessEvent(result);
+
+                if (_streamEnabled) {
+                    UpdateScreen(currentFrame, result);
+                }
+
+            }
+            catch (Exception ex) {
+                Log.Logger.Error(ex, "On Proccess Frame");
+            }
+            finally {
+                frame.Dispose();
+                currentFrame?.Dispose();
+                resized?.Dispose();
+            }
+        }
+
+        private void UpdateScreen(Image<Bgr, byte> currentFrame, PipelineResult result) {
+            foreach(var rec in result.FacePositions) {
+                DrawFaceSquare(currentFrame, rec);
+            }
+            if(result.Status == FaceRecognitionStatus.IdentifiedUser) {
+                DrawName(currentFrame, result.FacePositions[0], result.FirstFaceLabel);
+            }
+            var bitmapSource = ConvertToBitmapSource(currentFrame.Bitmap);
+            bitmapSource.Freeze();
+            ChangeUI(() => Video.Source = bitmapSource);
         }
 
         private void DrawName(Image<Bgr, byte> currentFrame, Rectangle facePosition, string label) {
-            CvInvoke.PutText(currentFrame, 
+            CvInvoke.PutText(currentFrame,
                              label,
                              new System.Drawing.Point(facePosition.X - 2, facePosition.Y - 2),
                              FontFace.HersheyTriplex,
                              1,
-                             new Bgr(0,255,0).MCvScalar);
+                             new Bgr(0, 255, 0).MCvScalar);
         }
 
         private static void DrawFaceSquare(Image<Bgr, byte> currentFrame, Rectangle facePosition) {
@@ -203,7 +249,7 @@ namespace App {
         }
 
         private void Register_Click(object sender, RoutedEventArgs e) {
-            if(String.IsNullOrEmpty(FaceName.Text)) {
+            if (String.IsNullOrEmpty(FaceName.Text)) {
                 return;
             }
             _facePipeline.RegisterNextFace(FaceName.Text);

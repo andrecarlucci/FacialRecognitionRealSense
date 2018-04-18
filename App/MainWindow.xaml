@@ -11,6 +11,7 @@
             <Grid>
                 <Image x:Name="Video" Height="480" Width="640"/>
                 <StackPanel VerticalAlignment="Bottom">
+                    <TextBlock x:Name="Ocr" Text="Ocr" Background="WhiteSmoke" Foreground="Black" />
                     <TextBlock x:Name="Detected" Text="Person" Background="WhiteSmoke" Foreground="Black" />
                     <Grid>
                         <Grid.ColumnDefinitions>

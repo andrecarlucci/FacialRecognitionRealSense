@@ -1,4 +1,5 @@
 ﻿using App.MediatorMessages;
+using Serilog;
 using SharpMediator;
 using System;
 using System.Collections.Generic;
@@ -14,29 +15,62 @@ namespace App {
         private DateTime _changed = DateTime.Now;
         private PipelineResult _pipelineResult;
 
-        private const string SOMEONE = "-1";
-        private const string NOBODY = "";
+        public static string SOMEONE = "someone";
+        public static string NOBODY = "";
 
-        private const int NODOBY_TO_IDENTIFIEDUSER = 2;
-        private const int NODOBY_TO_SOMEONE = 2;
+        public static int NODOBY_TO_IDENTIFIEDUSER = 2;
+        public static int NODOBY_TO_SOMEONE = 2;
+        public static int SOMEONE_TO_NODOBY = 15;
+        public static int SOMEONE_TO_IDENTIFIEDUSER = 2;
+        public static int IDENTIFIEDUSER_TO_NOBODY = 15;
+        public static int IDENTIFIEDUSER_TO_SOMEONE = 15;
+        public static int IDENTIFIEDUSER_TO_IDENTIFIEDUSER = 3;
 
-        private const int SOMEONE_TO_NODOBY = 15;
-        private const int SOMEONE_TO_IDENTIFIEDUSER = 2;
-
-        private const int IDENTIFIEDUSER_TO_NOBODY = 15;
-        private const int IDENTIFIEDUSER_TO_SOMEONE = 15;
-        private const int IDENTIFIEDUSER_TO_IDENTIFIEDUSER = 3;
-
-        private Dictionary<string, int> _reports = new Dictionary<string, int>();
+        private DateTime _check = DateTime.Now;
+        private TimeSpan _tick = TimeSpan.FromSeconds(1);
+        private Dictionary<FaceRecognitionStatus, int> _batch = new Dictionary<FaceRecognitionStatus, int>();
+        private Dictionary<string, int> _identified = new Dictionary<string, int>();
 
         public MirrorStateMachine(IMirrorClient mirrorClient) {
             _mirrorClient = mirrorClient;
         }
+
+        private void Process<K>(Dictionary<K, int> dic, K value) {
+            if (!dic.ContainsKey(value)) {
+                dic.Add(value, 0);
+            }
+            dic[value]++;
+        }
+
+        private K GetWinner<K>(Dictionary<K,int> dic) {
+            int max = 0;
+            K num = default(K);
+            foreach (var key in dic.Keys) {
+                if (max < dic[key]) {
+                    max = dic[key];
+                    num = key;
+                }
+            }
+            return num;
+        }
         
         public async Task ProcessEvent(PipelineResult result) {
-            _pipelineResult = result;
+            Process(_batch, result.Status);
+            if(String.IsNullOrEmpty(result.FirstFaceLabel)) {
+                Process(_identified, result.FirstFaceLabel);
+            }
+            if (DateTime.Now - _check < _tick) {
+                return;
+            }
 
-            Debug.WriteLine($"Mirror: {_state} x Camera: {result.Status} -> CameraLabel: {result.Label} Time: {SecondsSinceLastChange}");
+            var state = GetWinner(_batch);
+            var identified = GetWinner(_identified);
+
+            _check = DateTime.Now;
+            _batch.Clear();
+            _identified.Clear();
+            
+            Debug.WriteLine($"State: {_state}|{state} -> CameraLabel: {result.FirstFaceLabel} Time: {SecondsSinceLastChange}");
             
             switch (_state) {
                 case MirrorState.Nobody when result.Status == FaceRecognitionStatus.Nobody:
@@ -47,7 +81,7 @@ namespace App {
                     return;
                 case MirrorState.Nobody when result.Status == FaceRecognitionStatus.IdentifiedUser && TimeElapsed(NODOBY_TO_IDENTIFIEDUSER):
                     ChangeState(MirrorState.IdentifiedUser);
-                    await ChangeUser(result.Label);
+                    await ChangeUser(result.FirstFaceLabel);
                     return;
 
                 case MirrorState.Someone when result.Status == FaceRecognitionStatus.Nobody && TimeElapsed(SOMEONE_TO_NODOBY):
@@ -56,7 +90,7 @@ namespace App {
                     return;
                 case MirrorState.Someone when result.Status == FaceRecognitionStatus.IdentifiedUser && TimeElapsed(SOMEONE_TO_IDENTIFIEDUSER):
                     ChangeState(MirrorState.IdentifiedUser);
-                    await ChangeUser(result.Label);
+                    await ChangeUser(result.FirstFaceLabel);
                     return;
                 case MirrorState.Someone when result.Status == FaceRecognitionStatus.Someone:
                     ChangeState(MirrorState.Someone);
@@ -72,10 +106,10 @@ namespace App {
                     return;
                 case MirrorState.IdentifiedUser when 
                      result.Status == FaceRecognitionStatus.IdentifiedUser && 
-                     IsOtherUser(result.Label) && 
+                     IsOtherUser(result.FirstFaceLabel) && 
                      TimeElapsed(IDENTIFIEDUSER_TO_IDENTIFIEDUSER):
                     ChangeState(MirrorState.IdentifiedUser);
-                    await ChangeUser(result.Label);
+                    await ChangeUser(result.FirstFaceLabel);
                     return;
                 case MirrorState.IdentifiedUser when result.Status == FaceRecognitionStatus.IdentifiedUser:
                     ChangeState(MirrorState.IdentifiedUser);
@@ -90,12 +124,12 @@ namespace App {
 
         public async Task ChangeUser(string username) {
             if (await _mirrorClient.ChangeUser(username)) {
-                Debug.WriteLine("---->>>>>> SmartMirror label set to " + username);
+                Log.Debug("SmartMirror label set to " + username);
                 _currentUser = username;
                 Mediator.Default.Publish(new MirrorUserChanged { Username = username });
             }
             else {
-                Debug.WriteLine("Could not change SmartMirror label!");
+                Log.Debug("Could not change SmartMirror label!");
             }
         }
 

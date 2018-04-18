@@ -7,7 +7,6 @@ using System.Linq;
 
 namespace App {
     public partial class FaceRecognizer {
-        public const string UnknownLabel = "unknown";
 
         private readonly List<Image<Gray, Byte>> _images = new List<Image<Gray, Byte>>();
         private readonly List<string> _labels = new List<string>();
@@ -27,7 +26,7 @@ namespace App {
 
         public bool Train() {
             lock (_sync) {
-                if(_images.Count() <= 1) {
+                if(_images.Count <= 1) {
                     return false;
                 }
                 if (_faceRecognizer != null) {

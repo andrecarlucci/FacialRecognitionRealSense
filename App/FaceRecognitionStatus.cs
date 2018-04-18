@@ -2,6 +2,7 @@
     public enum FaceRecognitionStatus {
         Nobody,
         Someone,
-        IdentifiedUser
+        IdentifiedUser,
+        Multiple
     }
 }
