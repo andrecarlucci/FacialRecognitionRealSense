@@ -24,11 +24,10 @@ namespace App.Twitter {
                 message = DefaultMessage;
             }
             using (var stream = new MemoryStream(picture)) {
-                //var result = _client.SendTweetWithMedia(new SendTweetWithMediaOptions {
-                //    Status = message,
-                //    Images = new Dictionary<string, Stream> { { "", stream } }
-                //});
-                var result = new object();
+                var result = _client.SendTweetWithMedia(new SendTweetWithMediaOptions {
+                    Status = message,
+                    Images = new Dictionary<string, Stream> { { "", stream } }
+                });
                 return result != null;
             }
         }

@@ -38,7 +38,9 @@ namespace App {
             var rectangles = _faceDetector.DetectFaces(frame);
             if (rectangles.Length == 0) {
                 return new PipelineResult {
-                    Status = FaceRecognitionStatus.Nobody
+                    Status = FaceRecognitionStatus.Nobody,
+                    FacePositions = new Rectangle[0],
+                    FirstFaceLabel = ""
                 };
             }
 

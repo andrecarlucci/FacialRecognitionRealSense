@@ -14,14 +14,17 @@ namespace App {
         }
 
         public async Task<bool> ChangeUser(string username) {
+            if(username == null) {
+                username = MirrorStateMachine.SOMEONE;
+            }
             Mediator.Default.Publish(username);
-            Log.Debug("MirrorClient ChangeUser ->>> " + username);
+            Log.Debug("MirrorClient ChangeUser -------->>>>>>>>>>>>>>>>> " + username);
             var resp = await _client.GetAsync(Address + "/login?user=" + username);
             return resp.IsSuccessStatusCode;
         }
 
         public async Task<bool> SendMessage(string message, int size = 12) {
-            Log.Debug("MirrorClient SuperMessage ->>> " + message);
+            Log.Debug("MirrorClient SuperMessage -------->>>>>>>>>>>>>>>>> " + message);
             var resp = await _client.GetAsync($"{Address}/supermessage?text={message}&size={size}");
             return resp.IsSuccessStatusCode;
         }

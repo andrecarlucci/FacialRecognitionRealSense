@@ -1,25 +1,22 @@
-﻿using System;
-using System.Diagnostics;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Drawing;
-using System.IO;
-using System.Windows.Interop;
-using Emgu.CV;
-using Emgu.CV.Structure;
-using Emgu.CV.CvEnum;
-using SharpMediator;
-using System.Runtime.InteropServices;
-using Intel.RealSense;
+﻿using App.MediatorMessages;
 using App.OCR;
-using App.MediatorMessages;
-using Serilog.Core;
-using Serilog;
 using App.Selfie;
 using App.Twitter;
+using Emgu.CV;
+using Emgu.CV.CvEnum;
+using Emgu.CV.Structure;
+using Intel.RealSense;
+using Serilog;
+using SharpMediator;
+using System;
+using System.Drawing;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace App {
 
@@ -37,24 +34,20 @@ namespace App {
         private FaceDetector _faceDetector;
         private FaceRecognizer _faceRecognizer;
         private FacePipeline _facePipeline;
-        private OcrService _ocrService;
         private VideoCapture _capture;
         private SelfieStateMachine _selfieStateMachine;
 
-        private MirrorStateMachine _mirror;
-        //private MotionDetector _motionDetector;
+        private MirrorStateMachine _mirrorUserStateMachine;
+        private FrameAggregator _frameAggregator;
+
         private bool _streamEnabled;
-        private bool _tick;
+        private int _forceFaces = -1;
 
         public MainWindow() {
             InitializeComponent();
             Loaded += MainWindow_Loaded;
         }
-
-        private void MotionDetected(object sender, EventArgs e) {
-
-        }
-
+        
         private void MainWindow_Loaded(object sender, RoutedEventArgs e) {
             _faceRepository = new FaceRepository("Faces");
             _faceDetector = new FaceDetector("Assets\\haarcascade_frontalface_alt_tree.xml");
@@ -63,25 +56,16 @@ namespace App {
             _facePipeline = new FacePipeline(_faceDetector, _faceRecognizer, _faceRepository);
             _facePipeline.Prepare();
 
-            var mirrorClient = new MirrorClient();
-            _mirror = new MirrorStateMachine(mirrorClient);
-            _selfieStateMachine = new SelfieStateMachine(mirrorClient, new TwitterClient());
+            _frameAggregator = new FrameAggregator();
 
-            //_mirror = new MirrorStateMachine(new FakeMirrorClient());
+            var mirrorClient = new MirrorClient();
+            _mirrorUserStateMachine = new MirrorStateMachine(mirrorClient);
+            _selfieStateMachine = new SelfieStateMachine(mirrorClient, new TwitterClient());
 
             Mediator.Default.Subscribe<MirrorUserChanged>(this, msg => {
                 ChangeUI(() => Detected.Text = msg.Username);
             });
-
-            Mediator.Default.Subscribe<OcrDetected>(this, msg => {
-                ChangeUI(() => Ocr.Text = msg.Message);
-            });
-
-            if (UseOcr) {
-                _ocrService = new OcrService();
-                _ocrService.Init(".\\", "eng", Emgu.CV.OCR.OcrEngineMode.TesseractLstmCombined);
-            }
-
+            
             Task.Factory.StartNew(async () => {
                 try {
                     if (UseRealSense) {
@@ -104,7 +88,7 @@ namespace App {
             _capture = new VideoCapture(CameraIndex);
             while (true) {
                 var frame = _capture.QueryFrame();
-                await ProcessFrame(frame.ToImage<Bgr, Byte>()).ConfigureAwait(false);
+                await ProcessFrame(frame.ToImage<Bgr, Byte>());
             }
         }
 
@@ -122,11 +106,7 @@ namespace App {
                 context.Dispose();
                 return;
             }
-
-            //var config = new Config();
-            //config.EnableStream(Intel.RealSense.Stream.Color, width, height, Format.Bgr8, 15);
-            //config.EnableStream(Intel.RealSense.Stream.Depth, width, height, Format.Z16, 15);
-
+            
             var pipe = new Pipeline();
             pipe.Start();
 
@@ -165,33 +145,41 @@ namespace App {
             Image<Bgr, byte> resized = null;
             Image<Bgr, byte> currentFrame = null;
             try {
-                _tick = !_tick;
                 resized = frame.Resize(_width, _height, Inter.Cubic);
                 currentFrame = resized.Flip(FlipType.Horizontal);
-
-                if (UseOcr && _tick) {
-                    var msg = _ocrService.Recognize(resized.Mat) ?? "NONE";
-                    Debug.WriteLine("OCR-> " + msg);
-
-                    if (msg.ToUpper().Contains(WordForPicture)) {
-                        Mediator.Default.Publish(new OcrDetected { Message = WordForPicture });
-                    }
-                    //Debug.WriteLine("OCR-> " + _ocrService.RecognizeFullPage(currentFrame.Mat) ?? "None");
-                }
-
+                
                 var result = _facePipeline.ProccessFrame(currentFrame);
-
-                await _selfieStateMachine.ProcessEvent(new SomeOneInFrontOfMirror {
-                    Image = frame,
-                    NumberOfFaces = result.FacePositions.Length
-                });
-
-                await _mirror.ProcessEvent(result);
-
+                
                 if (_streamEnabled) {
                     UpdateScreen(currentFrame, result);
                 }
+                
+                if (_forceFaces > 0) {
+                    result.FacePositions = new Rectangle[_forceFaces];
+                    result.FirstFaceLabel = MirrorStateMachine.SOMEONE;
 
+                    if (_forceFaces == 0) {
+                        result.Status = FaceRecognitionStatus.Nobody;
+                    }
+                    else if (_forceFaces == 1) {
+                        result.Status = FaceRecognitionStatus.Someone;
+                    }
+                    else if(_forceFaces > 1) {
+                        result.Status = FaceRecognitionStatus.Multiple;
+                    }
+                }
+
+                var aggregated = _frameAggregator.ProcessEvent(result);
+                if(aggregated == null) {
+                    return;
+                }
+                if(_selfieStateMachine.State != SelfieState.CountDown &&
+                   _selfieStateMachine.State != SelfieState.Click) {
+                    await _mirrorUserStateMachine.ProcessEvent(aggregated);
+                }
+                if(_mirrorUserStateMachine.MirrorLabel == MirrorStateMachine.MANY) {
+                    await _selfieStateMachine.ProcessEvent(aggregated, frame);
+                }
             }
             catch (Exception ex) {
                 Log.Logger.Error(ex, "On Proccess Frame");
@@ -255,6 +243,15 @@ namespace App {
             _facePipeline.RegisterNextFace(FaceName.Text);
         }
 
+        private void ForceFacesBtn_Click(object sender, RoutedEventArgs e) {
+            if(Int32.TryParse(ForceFaces.Text, out int forceFaces)) {
+                _forceFaces = forceFaces;
+            }
+            else {
+                _forceFaces = -1;
+            }
+        }
+        
         private void StreamEnabled_Click(object sender, RoutedEventArgs e) {
             _streamEnabled = !_streamEnabled;
             if (_streamEnabled) {

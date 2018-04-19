@@ -233,11 +233,13 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
+    <Compile Include="AggregatedResult.cs" />
     <Compile Include="FaceCropper.cs" />
     <Compile Include="FaceDetector.cs" />
     <Compile Include="FacePipeline.cs" />
     <Compile Include="FaceRecognitionResult.cs" />
     <Compile Include="FaceRecognitionStatus.cs" />
+    <Compile Include="FrameAggregator.cs" />
     <Compile Include="GlobalSuppressions.cs" />
     <Compile Include="MediatorMessages\MirrorUserChanged.cs" />
     <Compile Include="MediatorMessages\OcrDetected.cs" />
@@ -246,6 +248,7 @@
     <Compile Include="OCR\OCRMode.cs" />
     <Compile Include="OCR\OcrService.cs" />
     <Compile Include="PipelineResult.cs" />
+    <Compile Include="Selfie\SelfieState.cs" />
     <Compile Include="Selfie\SelfieStateMachine.cs" />
     <Compile Include="SmartMirror\FakeMirrorClient.cs" />
     <Compile Include="SmartMirror\IMirrorClient.cs" />

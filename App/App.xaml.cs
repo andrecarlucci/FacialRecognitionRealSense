@@ -47,17 +47,15 @@ namespace App {
             TwitterClient.ConsumerSecret = Config["Twitter:ConsumerSecret"];
             TwitterClient.DefaultMessage = Config["Twitter:DefaultMessage"];
 
-            SelfieStateMachine.DelayBetweenMessages = Int32.Parse(Config["Selfie:DelayBetweenMessages"]);
-
+            SelfieStateMachine.CountDownDelay = Int32.Parse(Config["Selfie:CountDownDelay"]);
+            SelfieStateMachine.ClickDelay = Int32.Parse(Config["Selfie:ClickDelay"]);
+            SelfieStateMachine.FinalMessageDelay = Int32.Parse(Config["Selfie:FinalMessageDelay"]);
+            SelfieStateMachine.CoolDownDelay = Int32.Parse(Config["Selfie:CoolDownDelay"]);
+            
             MirrorClient.Address = Config["SmartMirror:Address"];
 
-            MirrorStateMachine.IDENTIFIEDUSER_TO_IDENTIFIEDUSER = GetInt("IDENTIFIEDUSER_TO_IDENTIFIEDUSER");
             MirrorStateMachine.IDENTIFIEDUSER_TO_NOBODY = GetInt("IDENTIFIEDUSER_TO_NOBODY");
-            MirrorStateMachine.IDENTIFIEDUSER_TO_SOMEONE = GetInt("IDENTIFIEDUSER_TO_SOMEONE");
             MirrorStateMachine.NODOBY_TO_IDENTIFIEDUSER = GetInt("NODOBY_TO_IDENTIFIEDUSER");
-            MirrorStateMachine.NODOBY_TO_SOMEONE = GetInt("NODOBY_TO_SOMEONE");
-            MirrorStateMachine.SOMEONE_TO_IDENTIFIEDUSER = GetInt("SOMEONE_TO_IDENTIFIEDUSER");
-            MirrorStateMachine.SOMEONE_TO_NODOBY = GetInt("SOMEONE_TO_NODOBY");
 
             int GetInt(string key) {
                 return Int32.Parse(Config["SmartMirror:" + key]);

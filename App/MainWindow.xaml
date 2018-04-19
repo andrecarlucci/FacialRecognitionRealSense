@@ -11,23 +11,52 @@
             <Grid>
                 <Image x:Name="Video" Height="480" Width="640"/>
                 <StackPanel VerticalAlignment="Bottom">
-                    <TextBlock x:Name="Ocr" Text="Ocr" Background="WhiteSmoke" Foreground="Black" />
-                    <TextBlock x:Name="Detected" Text="Person" Background="WhiteSmoke" Foreground="Black" />
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition  />
-                            <ColumnDefinition Width="200" />
-                            <ColumnDefinition Width="200" />
+                            <ColumnDefinition />
+                            <ColumnDefinition />
+                            <ColumnDefinition />
                         </Grid.ColumnDefinitions>
-                        <TextBox x:Name="FaceName" Grid.Column="0" 
+                        <Grid.RowDefinitions>
+                            <RowDefinition />
+                            <RowDefinition />
+                        </Grid.RowDefinitions>
+                        <TextBox x:Name="FaceName" 
+                                 Grid.Column="0"
                                  Background="WhiteSmoke" 
                                  Foreground="Black" 
                                  HorizontalAlignment="Stretch"
                                  />
-                        <Button x:Name="Register" Width="200px" Grid.Column="1" Click="Register_Click">
+                        <Button x:Name="Register" Width="200px" 
+                                Grid.Column="0" 
+                                Grid.Row="1"
+                                Click="Register_Click">
                             <TextBlock Text="Register" />
                         </Button>
-                        <Button x:Name="StreamEnabled" Width="200px" Grid.Column="2" Click="StreamEnabled_Click">
+                        
+                        <TextBox x:Name="ForceFaces"  
+                                   Grid.Column="1" 
+                                   Text="" 
+                                   Background="WhiteSmoke" 
+                                   Foreground="Black" 
+                                   Margin="0.4,0" />
+                        <Button x:Name="ForceFacesBtn" 
+                                Grid.Column="1"
+                                Grid.Row="1"
+                                Width="200px" 
+                                Click="ForceFacesBtn_Click">
+                            <TextBlock x:Name="ForceFacesBtnText" Text="Force Faces" />
+                        </Button>
+                        
+                        <!--<TextBlock x:Name="Ocr" Grid.Column="2" Text="Ocr" Background="WhiteSmoke" Foreground="Black" />-->
+                        <TextBlock x:Name="Detected" 
+                                   Grid.Column="2" 
+                                   Text="Person" Background="WhiteSmoke" Foreground="Black" />
+
+                        <Button x:Name="StreamEnabled"
+                                Grid.Column="2" 
+                                Grid.Row="1" 
+                                Click="StreamEnabled_Click">
                             <TextBlock x:Name="StreamEnabledText" Text="Enable Stream" />
                         </Button>
                     </Grid>
