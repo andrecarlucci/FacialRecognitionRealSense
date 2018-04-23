@@ -23,9 +23,9 @@ namespace App {
             return resp.IsSuccessStatusCode;
         }
 
-        public async Task<bool> SendMessage(string message, int size = 12) {
+        public async Task<bool> SendMessage(string message, int size = 12, int fade = 1000, string type = "text") {
             Log.Debug("MirrorClient SuperMessage -------->>>>>>>>>>>>>>>>> " + message);
-            var resp = await _client.GetAsync($"{Address}/supermessage?text={message}&size={size}");
+            var resp = await _client.GetAsync($"{Address}/supermessage?text={message}&size={size}&fade={fade}&type={type}");
             return resp.IsSuccessStatusCode;
         }
     }

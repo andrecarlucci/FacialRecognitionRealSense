@@ -47,13 +47,20 @@ namespace App {
             TwitterClient.ConsumerSecret = Config["Twitter:ConsumerSecret"];
             TwitterClient.DefaultMessage = Config["Twitter:DefaultMessage"];
 
+            
+            SelfieStateMachine.FirstMessageDelay = Int32.Parse(Config["Selfie:FirstMessageDelay"]);
             SelfieStateMachine.CountDownDelay = Int32.Parse(Config["Selfie:CountDownDelay"]);
             SelfieStateMachine.ClickDelay = Int32.Parse(Config["Selfie:ClickDelay"]);
             SelfieStateMachine.FinalMessageDelay = Int32.Parse(Config["Selfie:FinalMessageDelay"]);
             SelfieStateMachine.CoolDownDelay = Int32.Parse(Config["Selfie:CoolDownDelay"]);
-            
-            MirrorClient.Address = Config["SmartMirror:Address"];
+            SelfieStateMachine.PostToTwitter = Convert.ToBoolean(Config["Selfie:PostToTwitter"]);
+            SelfieStateMachine.PathToSave = Config["Selfie:PathToSave"] ?? "";
 
+            MirrorStateMachine.SELFIE = Config["Selfie:Trigger"];
+            
+
+            MirrorClient.Address = Config["SmartMirror:Address"];
+            
             MirrorStateMachine.IDENTIFIEDUSER_TO_NOBODY = GetInt("IDENTIFIEDUSER_TO_NOBODY");
             MirrorStateMachine.NODOBY_TO_IDENTIFIEDUSER = GetInt("NODOBY_TO_IDENTIFIEDUSER");
 

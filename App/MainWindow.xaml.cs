@@ -177,7 +177,7 @@ namespace App {
                    _selfieStateMachine.State != SelfieState.Click) {
                     await _mirrorUserStateMachine.ProcessEvent(aggregated);
                 }
-                if(_mirrorUserStateMachine.MirrorLabel == MirrorStateMachine.MANY) {
+                if(_mirrorUserStateMachine.MirrorLabel == MirrorStateMachine.SELFIE) {
                     await _selfieStateMachine.ProcessEvent(aggregated, frame);
                 }
             }

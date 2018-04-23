@@ -1,4 +1,5 @@
 ﻿using App.MediatorMessages;
+using App.Selfie;
 using Serilog;
 using SharpMediator;
 using System;
@@ -15,7 +16,7 @@ namespace App {
 
         public static string SOMEONE = "someone";
         public static string NOBODY = "nobody";
-        public static string MANY = "many";
+        public static string SELFIE = "selfie";
 
         public static int NODOBY_TO_IDENTIFIEDUSER = 2;
         public static int IDENTIFIEDUSER_TO_NOBODY = 15;
@@ -42,10 +43,12 @@ namespace App {
             var time = MirrorLabel == NOBODY ? NODOBY_TO_IDENTIFIEDUSER : 
                                                IDENTIFIEDUSER_TO_NOBODY;
 
-            var diff = (DateTime.Now - _lastChange).TotalSeconds;
-            if (diff <= time) {
-                Debug.WriteLine($"MirrorStateLocked: {time - diff}s");
-                return;
+            if(label != MirrorStateMachine.SELFIE) { 
+                var diff = (DateTime.Now - _lastChange).TotalSeconds;
+                if (diff <= time) {
+                    Debug.WriteLine($"MirrorStateLocked: {time - diff}s");
+                    return;
+                }
             }
             await ChangeUser(label);
         }

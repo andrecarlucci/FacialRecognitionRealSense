@@ -2,8 +2,10 @@
 using Emgu.CV;
 using Emgu.CV.Structure;
 using Serilog;
+using Serilog.Core;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 
 namespace App.Selfie {
@@ -11,8 +13,13 @@ namespace App.Selfie {
         private readonly IMirrorClient _mirrorClient;
         private readonly TwitterClient _twitterClient;
 
+        public static bool PostToTwitter = false;
+        public static string PathToSave = "";
+
+        public static int FirstMessageDelay = 2000;
         public static int CountDownDelay = 1000;
         public static int ClickDelay = 2000;
+        public static int ShowPictureDelay = 4000;
         public static int FinalMessageDelay = 7000;
         public static int CoolDownDelay = 15000;
 
@@ -20,10 +27,10 @@ namespace App.Selfie {
         private DateTime _waitUntil = DateTime.Now;
 
         private Dictionary<int, CountDownSteps> _countDownMessages = new Dictionary<int, CountDownSteps> {
-            {0, new CountDownSteps("Prontos para uma foto?", CountDownDelay + 3000) },
+            {0, new CountDownSteps("Prontos para uma foto?", CountDownDelay) },
             {1, new CountDownSteps("3", CountDownDelay) },
             {2, new CountDownSteps("2", CountDownDelay) },
-            {3, new CountDownSteps("1", CountDownDelay) },
+            {3, new CountDownSteps("1", 0) },
         };
         private int _countDown = 0;
 
@@ -46,12 +53,7 @@ namespace App.Selfie {
             }
             switch (State) {
                 case SelfieState.Ready:
-                    var num = result.NumberOfFaces;
-                    if (num <= 1) {
-                        return;
-                    }
-                    else if (num == 2) {
-                        await ShowMessage("Junte 3 pessoas para tirar uma selfie em amigos!", 5000);
+                    if(result.Label != MirrorStateMachine.SELFIE) {
                         return;
                     }
                     else {
@@ -72,6 +74,8 @@ namespace App.Selfie {
                     await Task.Delay(ClickDelay);
                     var success = await TakeSelfie(image);
                     if (success) {
+                        await ShowMessage(GetImageUrl(), 0, 500, "image");
+                        await Task.Delay(ShowPictureDelay);
                         await ShowMessage("Tweeted! Veja a foto no @espelhotdc");
                     }
                     else {
@@ -85,8 +89,8 @@ namespace App.Selfie {
             }
         }
 
-        private async Task ShowMessage(string msg, int wait = 0) {
-            await _mirrorClient.SendMessage(msg);
+        private async Task ShowMessage(string msg, int wait = 0, int fade = 500, string type = "text") {
+            await _mirrorClient.SendMessage(msg, 12, fade, type);
             if(wait > 0) {
                 _waitUntil = DateTime.Now.AddMilliseconds(wait);
             }
@@ -96,13 +100,30 @@ namespace App.Selfie {
             try {
                 image._GammaCorrect(0.6);
                 var bytes = image.ToJpegData();
-                _twitterClient.Send(bytes);
+                if(!String.IsNullOrEmpty(PathToSave)) {
+                    var path = GetFullFilePath();
+                    Log.Logger.Debug("Saving file at: " + path);
+                    File.Delete(path);
+                    File.WriteAllBytes(path, bytes);
+                }
+                if(PostToTwitter) {
+                    _twitterClient.Send(bytes);
+                }
                 return true;
             }
             catch(Exception ex) {
                 Log.Error(ex, "Error taking selfie :(");
                 return false;
             }
+        }
+
+        public string GetImageUrl() {
+            return "modules/MMM-SuperMessage/images/image.jpg";
+        }
+
+        private string GetFullFilePath() {
+            var file = Path.Combine(PathToSave, "MMM-SuperMessage", "images", "image.jpg");
+            return file;
         }
 
         private class CountDownSteps {

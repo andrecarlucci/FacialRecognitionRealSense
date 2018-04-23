@@ -42,7 +42,7 @@ namespace App {
             if(faces == 1) {
                 return identified;
             }
-            return MirrorStateMachine.MANY;
+            return MirrorStateMachine.SELFIE;
         }
 
         private void Process<K>(Dictionary<K, int> dic, K value) {
