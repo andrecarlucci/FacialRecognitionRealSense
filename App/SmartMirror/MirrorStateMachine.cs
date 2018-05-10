@@ -12,17 +12,15 @@ namespace App {
         private readonly IMirrorClient _mirrorClient;
 
         private string _currentUser;
-        private DateTime _changed = DateTime.Now;
+        private DateTime _lastChange = DateTime.Now;
 
         public static string SOMEONE = "someone";
         public static string NOBODY = "nobody";
         public static string SELFIE = "selfie";
 
-        public static int NODOBY_TO_IDENTIFIEDUSER = 2;
-        public static int IDENTIFIEDUSER_TO_NOBODY = 15;
+        public static int CHANGE_TIMEOUT = 10;
         
         public string MirrorLabel { get; set; } = MirrorStateMachine.NOBODY;
-        private DateTime _lastChange = DateTime.Now;
 
         public MirrorStateMachine(IMirrorClient mirrorClient) {
             _mirrorClient = mirrorClient;
@@ -32,32 +30,30 @@ namespace App {
             var label = aggregated.Label;
             var faces = aggregated.NumberOfFaces;
 
-            Debug.WriteLine($"State: {MirrorLabel}|{aggregated.Label} Faces: {aggregated.NumberOfFaces} Time: {SecondsSinceLastChange}");
-
-            if(MirrorLabel == label) {
+            Debug.WriteLine($"State: {label} Faces: {faces} Time: {SecondsSinceLastChange}");
+            
+            if(_currentUser == label && SecondsSinceLastChange < 3) {
                 await ChangeUser(label);
-                _lastChange = DateTime.Now;
                 return;
             }
 
-            var time = MirrorLabel == NOBODY ? NODOBY_TO_IDENTIFIEDUSER : 
-                                               IDENTIFIEDUSER_TO_NOBODY;
+            if(_currentUser == NOBODY) {
+                await ChangeUser(label);
+                return;
+            }
 
-            if(label != MirrorStateMachine.SELFIE) { 
-                var diff = (DateTime.Now - _lastChange).TotalSeconds;
-                if (diff <= time) {
-                    Debug.WriteLine($"MirrorStateLocked: {time - diff}s");
-                    return;
-                }
+            if(SecondsSinceLastChange < CHANGE_TIMEOUT) {
+                Debug.WriteLine($"MirrorState: waiting timeout: {SecondsSinceLastChange}");
+                return;
             }
             await ChangeUser(label);
         }
 
         public async Task ChangeUser(string username) {
             if (await _mirrorClient.ChangeUser(username)) {
-                Log.Debug("SmartMirror label set to " + username);
+                _lastChange = DateTime.Now;
                 _currentUser = username;
-                MirrorLabel = username;
+                Log.Debug("SmartMirror label set to " + username);
                 Mediator.Default.Publish(new MirrorUserChanged { Username = username });
             }
             else {
@@ -65,14 +61,7 @@ namespace App {
             }
         }
 
-        //private bool TimeElapsed(int seconds) {
-        //    return SecondsSinceLastChange > seconds;
-        //}
-
-        private int SecondsSinceLastChange => (int)(DateTime.Now - _changed).TotalSeconds;
-
-        private bool IsOtherUser(string username) {
-            return _currentUser != username;
-        }
+        private int SecondsSinceLastChange => (int)(DateTime.Now - _lastChange).TotalSeconds;
+        private bool IsRegisteredUser => _currentUser != NOBODY && _currentUser != SOMEONE;
     }
 }

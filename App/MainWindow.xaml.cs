@@ -35,8 +35,7 @@ namespace App {
         private FaceRecognizer _faceRecognizer;
         private FacePipeline _facePipeline;
         private VideoCapture _capture;
-        private SelfieStateMachine _selfieStateMachine;
-
+        
         private MirrorStateMachine _mirrorUserStateMachine;
         private FrameAggregator _frameAggregator;
 
@@ -60,7 +59,6 @@ namespace App {
 
             var mirrorClient = new MirrorClient();
             _mirrorUserStateMachine = new MirrorStateMachine(mirrorClient);
-            _selfieStateMachine = new SelfieStateMachine(mirrorClient, new TwitterClient());
 
             Mediator.Default.Subscribe<MirrorUserChanged>(this, msg => {
                 ChangeUI(() => Detected.Text = msg.Username);
@@ -153,33 +151,12 @@ namespace App {
                 if (_streamEnabled) {
                     UpdateScreen(currentFrame, result);
                 }
-                
-                if (_forceFaces > 0) {
-                    result.FacePositions = new Rectangle[_forceFaces];
-                    result.FirstFaceLabel = MirrorStateMachine.SOMEONE;
-
-                    if (_forceFaces == 0) {
-                        result.Status = FaceRecognitionStatus.Nobody;
-                    }
-                    else if (_forceFaces == 1) {
-                        result.Status = FaceRecognitionStatus.Someone;
-                    }
-                    else if(_forceFaces > 1) {
-                        result.Status = FaceRecognitionStatus.Multiple;
-                    }
-                }
 
                 var aggregated = _frameAggregator.ProcessEvent(result);
-                if(aggregated == null) {
+                if (aggregated == null) {
                     return;
                 }
-                if(_selfieStateMachine.State != SelfieState.CountDown &&
-                   _selfieStateMachine.State != SelfieState.Click) {
-                    await _mirrorUserStateMachine.ProcessEvent(aggregated);
-                }
-                if(_mirrorUserStateMachine.MirrorLabel == MirrorStateMachine.SELFIE) {
-                    await _selfieStateMachine.ProcessEvent(aggregated, frame);
-                }
+                await _mirrorUserStateMachine.ProcessEvent(aggregated);
             }
             catch (Exception ex) {
                 Log.Logger.Error(ex, "On Proccess Frame");

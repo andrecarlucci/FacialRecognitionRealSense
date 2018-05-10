@@ -57,12 +57,7 @@ namespace App {
             SelfieStateMachine.PathToSave = Config["Selfie:PathToSave"] ?? "";
 
             MirrorStateMachine.SELFIE = Config["Selfie:Trigger"];
-            
-
             MirrorClient.Address = Config["SmartMirror:Address"];
-            
-            MirrorStateMachine.IDENTIFIEDUSER_TO_NOBODY = GetInt("IDENTIFIEDUSER_TO_NOBODY");
-            MirrorStateMachine.NODOBY_TO_IDENTIFIEDUSER = GetInt("NODOBY_TO_IDENTIFIEDUSER");
 
             int GetInt(string key) {
                 return Int32.Parse(Config["SmartMirror:" + key]);

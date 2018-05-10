@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace App {
-    public partial class FrameAggregator {
+    public class FrameAggregator {
         private Dictionary<string, int> _identified = new Dictionary<string, int>();
         private Dictionary<int, int> _faces = new Dictionary<int, int>();
 
@@ -39,10 +39,7 @@ namespace App {
             if (faces == 0) {
                 return MirrorStateMachine.NOBODY;
             }
-            if(faces == 1) {
-                return identified;
-            }
-            return MirrorStateMachine.SELFIE;
+            return identified;
         }
 
         private void Process<K>(Dictionary<K, int> dic, K value) {
