@@ -1,4 +1,5 @@
 ﻿using App.MediatorMessages;
+using App.MotionDetector;
 using App.OCR;
 using App.Selfie;
 using App.Twitter;
@@ -35,7 +36,8 @@ namespace App {
         private FaceRecognizer _faceRecognizer;
         private FacePipeline _facePipeline;
         private VideoCapture _capture;
-        
+        private MotionDetectorService _motionDetectorService;
+
         private MirrorStateMachine _mirrorUserStateMachine;
         private FrameAggregator _frameAggregator;
 
@@ -51,6 +53,7 @@ namespace App {
             _faceRepository = new FaceRepository("Faces");
             _faceDetector = new FaceDetector("Assets\\haarcascade_frontalface_alt_tree.xml");
             _faceRecognizer = new FaceRecognizer();
+            _motionDetectorService = new MotionDetectorService();
 
             _facePipeline = new FacePipeline(_faceDetector, _faceRecognizer, _faceRepository);
             _facePipeline.Prepare();
@@ -63,6 +66,9 @@ namespace App {
             Mediator.Default.Subscribe<MirrorUserChanged>(this, msg => {
                 ChangeUI(() => Detected.Text = msg.Username);
             });
+
+            Mediator.Default.Subscribe<MotionDetection>
+
             
             Task.Factory.StartNew(async () => {
                 try {
@@ -147,7 +153,9 @@ namespace App {
                 currentFrame = resized.Flip(FlipType.Horizontal);
                 
                 var result = _facePipeline.ProccessFrame(currentFrame);
-                
+                _motionDetectorService.ComputeFrame(currentFrame);
+
+
                 if (_streamEnabled) {
                     UpdateScreen(currentFrame, result);
                 }
